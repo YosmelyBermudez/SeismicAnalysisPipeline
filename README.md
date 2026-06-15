@@ -131,6 +131,17 @@ With a $5 OpenAI budget → **~1,400 samples** fully analyzed.
 
 ---
 
+## Visual Results
+
+**FlatFault_A — No fault (idx=0)**
+![No fault](assets/fault_litho_0.png)
+
+**FlatFault_A — Central fault (idx=100)**
+![Central fault](assets/fault_litho_100.png)
+
+**FlatFault_A — Complex fault (idx=400)**
+![Complex fault](assets/fault_litho_400.png)
+
 ## Sample Output
 
 ```
