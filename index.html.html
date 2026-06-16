@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seismic Analysis Pipeline — SOM + Vision LLM + RAG</title>
+<style>
+  :root {
+    --bg: #0a0f1e;
+    --bg2: #111827;
+    --bg3: #1a2235;
+    --teal: #00d4aa;
+    --teal2: #00a688;
+    --amber: #f5a623;
+    --red: #e05555;
+    --slate: #8892a4;
+    --white: #e8edf5;
+    --white2: #c4cdd9;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(0,212,170,0.25);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { background: var(--bg); color: var(--white); font-family: 'Segoe UI', system-ui, sans-serif; line-height: 1.6; }
+
+  /* NAV */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(10,15,30,0.92); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 2rem; height: 56px;
+  }
+  .nav-logo { font-family: monospace; font-size: 13px; color: var(--teal); letter-spacing: 0.05em; }
+  .nav-links { display: flex; gap: 2rem; }
+  .nav-links a { color: var(--slate); text-decoration: none; font-size: 13px; transition: color 0.2s; }
+  .nav-links a:hover { color: var(--teal); }
+
+  /* SECTIONS */
+  section { padding: 80px 0; }
+  .container { max-width: 960px; margin: 0 auto; padding: 0 2rem; }
+
+  /* HERO */
+  #hero {
+    min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    padding-top: 56px; position: relative; overflow: hidden;
+  }
+  #hero-canvas {
+    position: absolute; inset: 0; opacity: 0.18;
+  }
+  .hero-eyebrow {
+    font-family: monospace; font-size: 12px; color: var(--teal);
+    letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 1.5rem;
+  }
+  .hero-title {
+    font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 700;
+    line-height: 1.15; margin-bottom: 1.5rem;
+    background: linear-gradient(135deg, var(--white) 40%, var(--teal));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero-sub {
+    font-size: 1.1rem; color: var(--slate); max-width: 560px;
+    margin: 0 auto 2.5rem;
+  }
+  .hero-badges { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-bottom: 3rem; }
+  .badge {
+    padding: 5px 14px; border-radius: 20px; font-size: 12px; font-family: monospace;
+    border: 1px solid var(--border2); color: var(--teal); background: rgba(0,212,170,0.07);
+  }
+  .badge.amber { border-color: rgba(245,166,35,0.4); color: var(--amber); background: rgba(245,166,35,0.07); }
+  .scroll-hint { color: var(--slate); font-size: 12px; animation: bounce 2s infinite; }
+  @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(6px)} }
+
+  /* SECTION HEADERS */
+  .sec-label { font-family: monospace; font-size: 11px; color: var(--teal); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 8px; }
+  .sec-title { font-size: clamp(1.4rem, 3vw, 2rem); font-weight: 600; margin-bottom: 12px; }
+  .sec-sub { color: var(--slate); max-width: 580px; margin-bottom: 3rem; font-size: 0.95rem; }
+
+  /* CARDS */
+  .card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.5rem;
+  }
+  .card-title { font-size: 13px; color: var(--slate); text-transform: uppercase; letter-spacing: 0.08em; font-family: monospace; margin-bottom: 12px; }
+
+  /* SOM SECTION */
+  .som-controls { display: flex; gap: 8px; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .som-btn {
+    padding: 7px 18px; border-radius: 8px; border: 1px solid var(--border);
+    background: transparent; color: var(--slate); font-size: 13px; cursor: pointer;
+    transition: all 0.2s; font-family: monospace;
+  }
+  .som-btn.active { border-color: var(--teal); color: var(--teal); background: rgba(0,212,170,0.1); }
+  .som-grid-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  .som-neuron-grid { display: grid; gap: 4px; }
+  .neuron {
+    border-radius: 6px; aspect-ratio: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s; border: 1.5px solid transparent;
+    font-family: monospace;
+  }
+  .neuron:hover { transform: scale(1.08); }
+  .neuron.selected { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(0,212,170,0.3); transform: scale(1.08); }
+  .neuron-id { font-size: 10px; opacity: 0.7; }
+  .neuron-vel { font-size: 9px; opacity: 0.55; }
+
+  .qe-display {
+    display: flex; flex-direction: column; gap: 1rem;
+  }
+  .qe-metric { display: flex; flex-direction: column; gap: 6px; }
+  .qe-label { font-size: 12px; color: var(--slate); font-family: monospace; }
+  .qe-value { font-size: 2rem; font-weight: 700; font-family: monospace; }
+  .qe-bar-bg { height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
+  .qe-bar-fill { height: 100%; border-radius: 3px; transition: all 0.5s; }
+  .qe-insight {
+    background: var(--bg3); border: 1px solid var(--border2); border-radius: 8px;
+    padding: 12px 14px; font-size: 13px; color: var(--white2); line-height: 1.6;
+    margin-top: 8px;
+  }
+
+  /* HOW TO CHOOSE */
+  .grid-comparison { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 2rem; }
+  .grid-card {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 1.25rem; text-align: center; transition: border-color 0.2s;
+  }
+  .grid-card.best { border-color: var(--teal); }
+  .grid-card .gc-size { font-size: 1.5rem; font-weight: 700; font-family: monospace; margin-bottom: 4px; }
+  .grid-card .gc-label { font-size: 11px; color: var(--slate); margin-bottom: 12px; }
+  .grid-card .gc-stat { font-size: 12px; color: var(--slate); margin: 3px 0; }
+  .grid-card .gc-stat span { color: var(--white2); font-family: monospace; }
+  .best-badge {
+    display: inline-block; padding: 2px 10px; background: rgba(0,212,170,0.15);
+    color: var(--teal); border-radius: 20px; font-size: 11px; font-family: monospace;
+    margin-bottom: 8px;
+  }
+
+  /* SAMPLE EXPLORER */
+  .sample-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .sample-tab {
+    padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border);
+    background: transparent; color: var(--slate); font-size: 12px; cursor: pointer;
+    transition: all 0.2s; font-family: monospace;
+  }
+  .sample-tab.active { border-color: var(--teal); color: var(--teal); background: rgba(0,212,170,0.08); }
+  .sample-tab.fault { }
+  .sample-tab.active.fault { border-color: var(--amber); color: var(--amber); background: rgba(245,166,35,0.08); }
+
+  .sample-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+  canvas { display: block; width: 100%; border-radius: 8px; }
+
+  .litho-strip { height: 32px; border-radius: 6px; overflow: hidden; display: flex; margin: 10px 0 6px; }
+  .litho-seg { flex: 1; }
+  .litho-legend { display: flex; gap: 10px; flex-wrap: wrap; }
+  .litho-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--slate); }
+  .litho-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+  .fault-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 12px; border-radius: 20px; font-size: 12px; font-family: monospace;
+    margin-bottom: 12px;
+  }
+  .fault-badge.yes { background: rgba(245,166,35,0.12); color: var(--amber); border: 1px solid rgba(245,166,35,0.3); }
+  .fault-badge.no  { background: rgba(0,212,170,0.08); color: var(--teal);  border: 1px solid rgba(0,212,170,0.2); }
+
+  .report-box {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-left: 3px solid var(--teal); border-radius: 0 8px 8px 0;
+    padding: 1.25rem 1.5rem; font-size: 13px; color: var(--white2);
+    line-height: 1.75; max-height: 280px; overflow-y: auto;
+  }
+  .report-box::-webkit-scrollbar { width: 4px; }
+  .report-box::-webkit-scrollbar-track { background: var(--bg3); }
+  .report-box::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .vision-box {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1.25rem; font-size: 12.5px;
+    color: var(--white2); line-height: 1.7; max-height: 200px; overflow-y: auto;
+  }
+
+  /* PIPELINE */
+  .pipeline-steps { display: flex; flex-direction: column; gap: 1px; }
+  .pipe-step {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.25rem 1.5rem;
+    display: grid; grid-template-columns: 48px 1fr auto;
+    gap: 1rem; align-items: start; cursor: pointer; transition: border-color 0.2s;
+    margin-bottom: 8px;
+  }
+  .pipe-step:hover { border-color: var(--border2); }
+  .pipe-num {
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-family: monospace; font-size: 16px; flex-shrink: 0;
+  }
+  .pipe-num.l1 { background: rgba(0,212,170,0.12); color: var(--teal); }
+  .pipe-num.l2 { background: rgba(245,166,35,0.12); color: var(--amber); }
+  .pipe-num.l3 { background: rgba(100,150,255,0.12); color: #7ca9ff; }
+  .pipe-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .pipe-meta { font-size: 12px; color: var(--slate); font-family: monospace; }
+  .pipe-cost { font-family: monospace; font-size: 13px; color: var(--teal); white-space: nowrap; }
+  .pipe-detail { grid-column: 1/-1; font-size: 13px; color: var(--slate); line-height: 1.7; padding-top: 12px; border-top: 1px solid var(--border); margin-top: 4px; display: none; }
+  .pipe-detail.open { display: block; }
+
+  /* METRICS ROW */
+  .metrics-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 1.5rem; }
+  .metric-card { background: var(--bg3); border-radius: 10px; padding: 1.25rem; text-align: center; }
+  .metric-val { font-size: 1.8rem; font-weight: 700; font-family: monospace; color: var(--teal); }
+  .metric-label { font-size: 12px; color: var(--slate); margin-top: 4px; }
+
+  /* FOOTER */
+  footer {
+    border-top: 1px solid var(--border); padding: 2rem;
+    text-align: center; color: var(--slate); font-size: 12px; font-family: monospace;
+  }
+
+  @media (max-width: 640px) {
+    .som-grid-wrap, .sample-layout, .grid-comparison, .metrics-row { grid-template-columns: 1fr; }
+    .nav-links { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">Yosmely Bermúdez · Geophysical Engineering → AI Engineering</div>
+  <div class="nav-links">
+    <a href="#som">SOM</a>
+    <a href="#grid-choice">Grid choice</a>
+    <a href="#samples">Results</a>
+    <a href="#pipeline">Pipeline</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section id="hero">
+  <canvas id="hero-canvas"></canvas>
+  <div style="position:relative; z-index:1;">
+    <div class="hero-eyebrow">OpenFWI · Kaggle Waveform Inversion Competition</div>
+    <h1 class="hero-title">3-Layer Seismic<br>Analysis Pipeline</h1>
+    <p class="hero-sub">Unsupervised SOM facies classification → Vision LLM geological interpretation → RAG scientific report enrichment</p>
+    <div class="hero-badges">
+      <span class="badge">SOM 4×4</span>
+      <span class="badge">GPT-4o mini</span>
+      <span class="badge">FAISS RAG</span>
+      <span class="badge">FlatVel_A · FlatFault_A</span>
+      <span class="badge amber">$0.003 / sample</span>
+    </div>
+    <div class="scroll-hint">↓ scroll to explore</div>
+  </div>
+</section>
+
+<!-- SOM EXPLAINER -->
+<section id="som" style="padding-top:100px;">
+  <div class="container">
+    <div class="sec-label">Layer 1 — Unsupervised Classification</div>
+    <h2 class="sec-title">How the Self-Organizing Map works</h2>
+    <p class="sec-sub">A SOM compresses high-dimensional seismic features onto a 2D neuron grid. Each neuron learns a velocity prototype. Click any neuron to inspect what it represents geologically.</p>
+
+    <div class="som-controls">
+      <button class="som-btn active" onclick="setSOMDataset('flatfault')">FlatFault_A — 2D pixel-wise</button>
+      <button class="som-btn" onclick="setSOMDataset('flatvel')">FlatVel_A — 1D row-wise</button>
+    </div>
+
+    <div class="som-grid-wrap">
+      <div class="card">
+        <div class="card-title">4×4 neuron grid — click to inspect</div>
+        <div id="som-neuron-grid" class="som-neuron-grid" style="grid-template-columns: repeat(4,1fr); gap:5px;"></div>
+        <div style="margin-top:10px; font-size:11px; color:var(--slate); font-family:monospace;">
+          Color = learned mean velocity · Brighter = higher velocity
+        </div>
+      </div>
+      <div class="card qe-display" id="neuron-detail">
+        <div class="card-title">quantization error & model quality</div>
+        <div class="qe-metric">
+          <div class="qe-label">QE (quantization error)</div>
+          <div class="qe-value" id="qe-val" style="color:var(--teal);">0.44</div>
+          <div class="qe-bar-bg"><div class="qe-bar-fill" id="qe-bar" style="width:44%; background:var(--teal);"></div></div>
+          <div style="font-size:11px; color:var(--slate); font-family:monospace; margin-top:4px;">Lower = neurons fit data better (max ~3.5 untrained)</div>
+        </div>
+        <div class="qe-metric">
+          <div class="qe-label">features per vector</div>
+          <div class="qe-value" id="feat-val" style="color:var(--amber); font-size:1.4rem;">7</div>
+        </div>
+        <div class="qe-insight" id="som-insight">
+          <strong style="color:var(--white);">2D pixel-wise SOM</strong> — used for FlatFault_A where faults create <em>lateral</em> velocity changes. Each pixel (depth × lateral) becomes one feature vector. The SOM learns to distinguish fault blocks from intact sediment.
+        </div>
+        <div id="neuron-info" style="margin-top:12px; font-size:13px; color:var(--slate); font-family:monospace; line-height:1.8;">
+          ← Click a neuron to inspect its learned prototype
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW TO CHOOSE GRID SIZE -->
+<section id="grid-choice" style="background: var(--bg2); padding: 80px 0;">
+  <div class="container">
+    <div class="sec-label">SOM Design Decision</div>
+    <h2 class="sec-title">How to choose the grid size</h2>
+    <p class="sec-sub">The grid size controls how many geological facies the model can distinguish. Bigger isn't better — you need enough neurons to capture real geological variation, but not so many that the map becomes uninterpretable.</p>
+
+    <div class="grid-comparison">
+      <div class="grid-card">
+        <div class="gc-size">3×3</div>
+        <div class="gc-label">9 neurons</div>
+        <div class="gc-stat">QE: <span>~1.8</span></div>
+        <div class="gc-stat">Active facies: <span>3–4</span></div>
+        <div class="gc-stat">Risk: <span style="color:var(--red);">too coarse</span></div>
+        <div style="margin-top:10px; font-size:11px; color:var(--slate); line-height:1.6;">
+          Merges distinct lithologies into single neurons. A sandstone and a shale at similar velocities look the same to the model.
+        </div>
+      </div>
+      <div class="grid-card best">
+        <div class="best-badge">✓ selected</div>
+        <div class="gc-size" style="color:var(--teal);">4×4</div>
+        <div class="gc-label">16 neurons</div>
+        <div class="gc-stat">QE FlatVel_A: <span style="color:var(--teal);">0.88</span></div>
+        <div class="gc-stat">QE FlatFault_A: <span style="color:var(--teal);">0.44</span></div>
+        <div class="gc-stat">Active facies: <span style="color:var(--teal);">5–9</span></div>
+        <div style="margin-top:10px; font-size:11px; color:var(--slate); line-height:1.6;">
+          Best balance. Enough resolution to separate soft sediments, compacted sediments, sedimentary rock, hard rock, and fault blocks. Geologically interpretable.
+        </div>
+      </div>
+      <div class="grid-card">
+        <div class="gc-size">5×5</div>
+        <div class="gc-label">25 neurons</div>
+        <div class="gc-stat">QE: <span>~0.31</span></div>
+        <div class="gc-stat">Active facies: <span>10–18</span></div>
+        <div class="gc-stat">Risk: <span style="color:var(--red);">overfragmented</span></div>
+        <div style="margin-top:10px; font-size:11px; color:var(--slate); line-height:1.6;">
+          Lower QE but splits what should be one geological unit into 3 neurons. Maps look noisy. Harder to inject meaningful context into the Vision LLM.
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:0;">
+      <div class="card-title">the three-criteria decision rule</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:1.5rem; margin-top:4px;">
+        <div>
+          <div style="font-size:13px; font-weight:600; color:var(--teal); margin-bottom:6px;">1. QE elbow</div>
+          <div style="font-size:13px; color:var(--slate); line-height:1.6;">Plot QE vs grid size. Pick the point where adding more neurons gives diminishing returns — the "elbow". For this dataset it's at 4×4.</div>
+        </div>
+        <div>
+          <div style="font-size:13px; font-weight:600; color:var(--teal); margin-bottom:6px;">2. Active neuron ratio</div>
+          <div style="font-size:13px; color:var(--slate); line-height:1.6;">If >60% of neurons are active, the grid is well-utilized. If only 4 of 25 activate, you wasted 21 neurons. Target 40–70% active.</div>
+        </div>
+        <div>
+          <div style="font-size:13px; font-weight:600; color:var(--teal); margin-bottom:6px;">3. Geological meaning</div>
+          <div style="font-size:13px; color:var(--slate); line-height:1.6;">Can you label each active neuron with a real lithology? Soft sed., hard rock, fault block? If yes, the grid is doing useful work.</div>
+        </div>
+      </div>
+      <div style="margin-top:1.25rem; padding-top:1.25rem; border-top:1px solid var(--border); font-size:12px; color:var(--slate); font-family:monospace;">
+        Empirical starting point: <span style="color:var(--white2);">neurons ≈ 5 × √(n_samples)</span> → for 7000 vectors that's 415 neurons (20×20). We deliberately shrink to 16 for interpretability. This is a domain choice, not a statistics choice.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SAMPLE EXPLORER -->
+<section id="samples" style="padding-top:80px;">
+  <div class="container">
+    <div class="sec-label">Real pipeline outputs</div>
+    <h2 class="sec-title">6 processed samples</h2>
+    <p class="sec-sub">Every number, profile, and report below is real output from the pipeline — no simulated data.</p>
+
+    <div class="sample-tabs" id="sample-tabs"></div>
+
+    <div id="sample-display">
+      <div class="sample-layout">
+        <div class="card">
+          <div class="card-title">velocity profile (depth → mean velocity)</div>
+          <canvas id="vel-canvas" height="200"></canvas>
+          <div style="margin-top:10px; font-size:11px; color:var(--slate); font-family:monospace;" id="vel-meta"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">SOM lithology map — central column</div>
+          <div id="fault-badge-wrap"></div>
+          <canvas id="litho-canvas" height="200"></canvas>
+          <div class="litho-strip" id="litho-strip"></div>
+          <div class="litho-legend" id="litho-legend"></div>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-bottom:1.5rem;">
+        <div class="card">
+          <div class="card-title">vision LLM interpretation (GPT-4o mini)</div>
+          <div class="vision-box" id="vision-box"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">SOM analysis metrics</div>
+          <div id="som-metrics" style="font-family:monospace; font-size:13px; line-height:2; color:var(--white2);"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">geological report — Layer 3 RAG output</div>
+        <div class="report-box" id="report-box"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PIPELINE -->
+<section id="pipeline" style="background:var(--bg2); padding:80px 0;">
+  <div class="container">
+    <div class="sec-label">Architecture</div>
+    <h2 class="sec-title">3-layer pipeline</h2>
+    <p class="sec-sub">Each layer feeds context into the next. The SOM bridge is what prevents the Vision LLM from hallucinating faults in clean samples.</p>
+
+    <div class="pipeline-steps">
+      <div class="pipe-step" onclick="togglePipe(0)">
+        <div class="pipe-num l1">1</div>
+        <div>
+          <div class="pipe-title">SOM — seismic facies classification</div>
+          <div class="pipe-meta">MiniSom 4×4 · 5000 iterations · QE=0.88 (FlatVel_A) / 0.44 (FlatFault_A)</div>
+          <div class="pipe-detail" id="pd0">
+            Extracts 25 acoustic features per depth row for FlatVel_A (5 sources × mean, max, std, energy, zero-crossings), or 7 point-local features per pixel for FlatFault_A. Each position maps to its Best Matching Unit (BMU) in the 4×4 grid. The fault discontinuity score — mean absolute lateral difference across the lithology map — is injected into the Vision LLM prompt as prior context. Without this bridge, GPT-4o mini reported faults in 3/3 no-fault samples. With SOM context: 1/3 false positives.
+          </div>
+        </div>
+        <div class="pipe-cost">$0.00</div>
+      </div>
+      <div class="pipe-step" onclick="togglePipe(1)">
+        <div class="pipe-num l2">2</div>
+        <div>
+          <div class="pipe-title">Vision LLM — geological interpretation</div>
+          <div class="pipe-meta">GPT-4o mini · detail:high · PNG→JPEG 1200px · SOM context injected</div>
+          <div class="pipe-detail" id="pd1">
+            The 3-panel figure (seismic waveform, velocity map, SOM lithology) is compressed from PNG to JPEG at 1200px max width — cutting token usage 2.4× with no geological quality loss. The prompt includes the SOM fault score as structured prior: <em style="color:var(--teal);">"CONTEXT FROM SOM: fault likely present (score=0.72, lateral index=34)"</em>. The model then confirms or contradicts the SOM finding from image evidence, producing a structured 5-point analysis of fault presence, velocity range, layer count, SOM colors, and seismic patterns.
+          </div>
+        </div>
+        <div class="pipe-cost">~$0.003</div>
+      </div>
+      <div class="pipe-step" onclick="togglePipe(2)">
+        <div class="pipe-num l3">3</div>
+        <div>
+          <div class="pipe-title">RAG — scientific literature enrichment</div>
+          <div class="pipe-meta">FAISS local index · 60 FWI papers · all-MiniLM-L6-v2 · top-4 retrieved</div>
+          <div class="pipe-detail" id="pd2">
+            Keywords extracted from the Vision LLM output (fault, layer, velocity) are used to query either the live arXiv API (v1) or a local FAISS index of 60 pre-downloaded FWI papers (v2). The 4 most relevant abstracts are injected into a second GPT-4o mini call (text only, no image) which writes a 200–250 word geological report with citations. The FAISS upgrade makes retrieval consistent across runs — the same 4 papers retrieved every time, not random arXiv results.
+          </div>
+        </div>
+        <div class="pipe-cost">~$0.0003</div>
+      </div>
+    </div>
+
+    <div class="metrics-row">
+      <div class="metric-card">
+        <div class="metric-val">$0.0033</div>
+        <div class="metric-label">cost per sample (vision + RAG)</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-val">~$1.65</div>
+        <div class="metric-label">estimated cost for 500 samples</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-val">$0.021</div>
+        <div class="metric-label">spent — 6 samples processed</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <strong style="color:var(--white)">Yosmely Bermúdez</strong> &nbsp;·&nbsp; Geophysical Engineering → AI Engineering &nbsp;·&nbsp;
+  OpenFWI · MiniSom · GPT-4o mini · arXiv RAG &nbsp;·&nbsp;
+  <span style="color:var(--teal)">huggingface.co/yosbermudez</span>
+</footer>
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────────────────
+const SAMPLES = [{"label":"FlatFault_A \u2014 no fault","sample_idx":0,"dataset":"FlatFault_A","has_fault":false,"fault_score":0.087,"fault_x":2,"vel_range":"2253\u20133252","vmap_row":[2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.0,2253.22265625,2257.419677734375,2270.389404296875,2287.6298828125,2302.659423828125,2317.13427734375,2333.228515625,2348.34033203125,2564.54150390625,3218.429931640625,3248.92138671875,3250.153564453125,3250.25048828125,3250.195556640625,3250.472900390625,3250.91357421875,3250.28173828125,3250.62060546875,3251.433837890625,3250.677978515625,3250.145263671875,3251.212158203125,3250.5517578125,3251.19189453125,3251.177734375,3250.318603515625,3250.68994140625,3250.55712890625,3250.100341796875,3251.44384765625,3251.857177734375,3251.859375,3251.936279296875,3251.999267578125,3252.0,3251.9482421875,3251.93798828125,3251.92333984375,3251.998779296875,3252.0],"litho_col":[3,2,2,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,3,3,3,3,3,1,1,1,1,1,1,1,2,3,3,2,2,3,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3],"vision_text":"1. **FAULT**: NO. There is no clear discontinuity in the CENTER panel.\n\n2. **VELOCITY RANGE**: Min: 1500 m/s; Max: 4500 m/s (based on the colorbar).\n\n3. **LAYERS**: There are 3 distinct horizontal layers. The approximate depth index ranges are:\n   - Layer 1: 0-20\n   - Layer 2: 20-40\n   - Layer 3: 40-60\n\n4. **SOM MAP**: Dominant colors in the top half of the RIGHT panel are light blue, indicating softer sediments, while the bottom half shows darker blue and green, indicating harder rock layers.\n\n5. **SEISMIC**: There are reflection hyperbolas visible in the LEFT panel, indicating subsurface features. However, no distinct offsets suggest a significant fault presence.","report":"**Geological Interpretation Report**\n\nThe seismic images analyzed reveal three distinct horizontal layers, suggesting clear stratigraphic relationships within the subsurface. The approximate depth index ranges for these layers are: Layer 1 (0-20), Layer 2 (20-40), and Layer 3 (40-60). The absence of distinct discontinuities in the center panel indicates a lack of significant faulting within this section, aligning with the visible reflection hyperbolas in the left panel that point towards subsurface features without notable offsets.\n\nThe velocity range observed (1500 m/s to 4500 m/s) suggests a variation in material properties, with the top layer composed of softer sediments, transitioning to harder rock layers in the deeper sections, as indicated by the color representation in the top half of the right panel. This stratification is akin to findings in studies like Yang and Ma [2], which emphasize the importance of accurate velocity models for effective seismic imaging.\n\nGiven the synthetic nature of this dataset, adopting the multi-scale structural similarity approach described by He et al. [4] may enhance Full Waveform Inversion (FWI) results, improving resolution while mitigating issues related to cycle skipping due to inaccurate background velocity. The geological scenario likely reflects a sedimentary basin setting with potential hydrocarbon prospects, supported by the softer sediment layering, characteristic of depositional environments conducive to resource accumulation."},{"label":"FlatFault_A \u2014 central fault","sample_idx":100,"dataset":"FlatFault_A","has_fault":true,"fault_score":0.315,"fault_x":64,"vel_range":"1645\u20134131","vmap_row":[1645.0460205078125,1645.0460205078125,1645.0618896484375,1645.1412353515625,1645.13427734375,1645.114990234375,1645.08349609375,1645.13525390625,1645.187255859375,1645.1290283203125,1645.601806640625,1750.658447265625,2535.1767578125,2608.321533203125,2617.433837890625,2624.79150390625,2628.550048828125,2635.044921875,2644.189697265625,2878.008544921875,4049.306640625,4127.23291015625,4130.69921875,4130.14892578125,4129.97509765625,4129.3046875,4130.248046875,4130.77978515625,4130.74462890625,4129.84619140625,4128.22509765625,4127.63623046875,4127.6572265625,4130.86328125,4129.36767578125,4130.4697265625,4130.19091796875,4129.81982421875,4129.81591796875,4128.33935546875,4130.63232421875,4130.64453125,4129.96240234375,4129.6669921875,4127.478515625,4128.3125,4130.234375,4130.6064453125,4130.10693359375,4129.169921875,4128.9921875,4129.025390625,4130.74755859375,4129.4169921875,4130.58203125,4129.7060546875,4128.8564453125,4128.8505859375,4127.96923828125,4129.76953125,4130.16259765625,4130.8095703125,4130.87158203125,4130.23193359375,4130.919921875,4130.251953125,4130.6357421875,4130.67431640625,4129.81689453125,4130.81591796875],"litho_col":[4,3,4,1,0,1,0,4,1,3,1,1,4,1,4,3,4,3,1,3,1,3,4,1,3,4,3,4,3,3,4,3,4,4,4,4,3,3,4,4,4,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4],"vision_text":"1. **FAULT:** YES. The clear discontinuity is observed at lateral index 64 and depth index around 10.\n\n2. **VELOCITY RANGE:** Min: 1500 m/s, Max: 4500 m/s.\n\n3. **LAYERS:** There are approximately 5 distinct horizontal layers. The approximate depth index ranges are:\n   - Layer 1: 0-5\n   - Layer 2: 5-10\n   - Layer 3: 10-20\n   - Layer 4: 20-30\n   - Layer 5: 30-40\n\n4. **SOM MAP:** In the top half of the RIGHT panel, the dominant colors are shades of blue representing soft sediments. In the bottom half, the dominant colors are reddish shades indicating hard rock.\n\n5. **SEISMIC:** There are reflection hyperbolas observable in the LEFT panel, indicating reflections from subsurface layers. There is no significant offset detected in the waveforms.","report":"### Geological Interpretation Report\n\nThe seismic image interpretation indicates the presence of a fault at lateral index 64 and a depth index of approximately 10, marked by a distinct discontinuity. This structural feature is likely a significant tectonic element that could influence fluid migration and resource distribution patterns. The identified 5 distinct layers, ranging in depth from 0 to 40, are indicative of a layered stratigraphy, which can be further probed for reservoir characterization.\n\nIn terms of velocity, the range observed (1500 to 4500) is typical for soft sediments transitioning to harder rocks, as corroborated by the SOM map, which shows a gradient from blue (soft sediments) in the upper section to red (hard rock) in the lower half. This layering can impact wave propagation and inversion accuracy, highlighting the need for robust velocity modeling as seen in the literature, particularly in the works of Yang and Ma [2] and He et al. [4]. \n\nGiven the potential complexities arising from the observed reflection hyperbolas and the minimal waveform offset, the proposed approach for Full Waveform Inversion (FWI) should integrate a multi-scale methodology, such as that described by He et al. [4], to effectively handle possible cycle skipping and enhance resolution. This approach would be well-suited to delineate the subtle subsurface features and accurately characterize the fault's influence on the surrounding layers, suggesting an active geological environment conducive to significant fluid movement."},{"label":"FlatFault_A \u2014 complex fault","sample_idx":400,"dataset":"FlatFault_A","has_fault":false,"fault_score":0.081,"fault_x":11,"vel_range":"2974\u20134445","vmap_row":[2974.0,2974.0,2974.0,2974.0,2974.0,2974.0,2974.09228515625,2974.398193359375,2975.19677734375,2975.5927734375,2974.787109375,2974.837158203125,2974.678466796875,2974.83349609375,2974.890625,2974.738037109375,2974.461181640625,2974.62548828125,2975.346923828125,2975.14453125,2974.518798828125,2974.52685546875,2974.628662109375,2974.757080078125,2974.88037109375,2974.943359375,2974.80712890625,2975.257568359375,2975.35546875,2974.515869140625,2974.69970703125,2974.446533203125,2974.6435546875,2975.690673828125,3146.385986328125,3851.316162109375,3910.470947265625,3898.945556640625,3891.5419921875,3990.461669921875,4062.433837890625,4417.1015625,4439.99755859375,4440.947265625,4440.4287109375,4440.716796875,4442.0009765625,4442.7880859375,4442.29931640625,4442.53271484375,4442.27490234375,4441.5986328125,4441.59619140625,4440.81396484375,4441.35693359375,4440.45068359375,4441.9404296875,4442.46923828125,4441.6669921875,4442.98681640625,4443.03466796875,4443.01806640625,4442.8623046875,4442.94091796875,4442.337890625,4441.9384765625,4442.64501953125,4442.703125,4442.37841796875,4441.80908203125],"litho_col":[4,4,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,4,3,4,2,3,3,4,2,4,4,4,3,4,3,4,4,3,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4],"vision_text":"Based on the provided image:\n\n1. **FAULT:** NO. There is no clear discontinuity in the center panel (velocity map). The stated discontinuity score of 0.081 further supports this observation.\n\n2. **VELOCITY RANGE:** Minimum velocity from the colorbar is 1500 m/s; maximum velocity is 4500 m/s.\n\n3. **LAYERS:** There are approximately 5 distinct horizontal layers. Approximate depth index ranges: \n   - Layer 1: 0\u201310\n   - Layer 2: 10\u201330\n   - Layer 3: 30\u201340\n   - Layer 4: 40\u201350\n   - Layer 5: 50\u201360\n\n4. **SOM MAP:** Dominant colors in the top half of the right panel are light blue (soft sediments), while the bottom half predominantly features dark red (very hard rock).\n\n5. **SEISMIC:** There are no significant reflection hyperbolas or offsets visible in the left panel. The seismic data appears relatively uniform without clear evidence of reflections.","report":"**Geological Report on Seismic Imaging Interpretation**\n\nThe seismic image interpretation indicates a relatively uniform subsurface, characterized by the absence of faults and significant reflection hyperbolas. The velocity map reveals a minimum velocity of 1500 and a maximum velocity of 4500, suggesting the presence of varying lithologies, likely including both soft sediments and harder rock formations. The interpretation recognizes five distinct horizontal layers, which may correspond to different geological formations, with layer depths ranging from 0 to 60 on the depth index. The dominant light blue colors in the upper half of the SOM (Self-Organizing Map) panel point towards soft sediments, while dark red in the bottom half indicates very hard rock, which is consistent with the observed velocity variations.\n\nThese findings align well with literature that emphasizes the significance of accurate velocity models for proper subsurface imaging. For instance, Yang and Ma [2] highlight the necessity of precise velocity models to enhance seismic imaging techniques, suggesting that FWI can provide such models despite its complexities. Furthermore, Mu et al. [1] discuss the challenges of noise impacting FWI accuracy, which underscores the need for robust methodologies in this context.\n\nTo optimize the inversion process and reduce cycle skipping, especially given potential inaccuracies in background velocity, a multi-scale structural similarity approach akin to that proposed by He et al. [4] may be the most effective FWI strategy for this dataset. This suggests that the subsurface likely comprises a sequence of sedimentary layers overlying a rigid bedrock, with potential implications for further exploration activities in this area."},{"label":"FlatVel_A \u2014 high variability","sample_idx":194,"dataset":"FlatVel_A","has_fault":false,"fault_score":null,"fault_x":null,"vel_range":"1649\u20134482","vmap_row":[1649.0,1649.0,1649.0,1649.0,1649.0,1649.0,1649.0,1649.0,1649.0,1649.0,1833.0,1833.0,1833.0,1833.0,1833.0,1833.0,1833.0,1833.0,1833.0,1833.0,1833.0,1833.0,1833.0,1833.0,2066.0,2066.0,2066.0,2066.0,2066.0,2066.0,2066.0,2066.0,2066.0,2066.0,2066.0,2066.0,2066.0,2066.0,2066.0,4273.0,4273.0,4273.0,4273.0,4273.0,4273.0,4273.0,4273.0,4273.0,4273.0,4273.0,4273.0,4273.0,4306.0,4306.0,4306.0,4306.0,4306.0,4306.0,4306.0,4306.0,4306.0,4306.0,4306.0,4306.0,4306.0,4306.0,4482.0,4482.0,4482.0,4482.0],"litho_col":[4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,2,2,1,1,1,3,3,3,3,3,3,3,4,2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4],"n_layers":9,"gradient":41.06,"vision_text":"### Analysis of Seismic Data\n\n1. **Layers**:\n   - The **center panel** displays **four distinct horizontal layers** based on the color gradient that indicates different velocities. The identified depth ranges are:\n     - **0-10 m**: Soft sediments (light blue)\n     - **10-40 m**: Compacted sediments (blue)\n     - **40-60 m**: Sedimentary rock (orange)\n     - **60+ m**: Very hard rock (red)\n\n2. **Velocity Trend**:\n   - The **velocity trend** observed in the **center panel** shows an **increase with depth**. This is indicated by the transition from lower velocities in the upper layers to significantly higher velocities in the deeper layers, reflecting the effects of compaction and lithification.\n\n3. **Lithology**:\n   - The **right panel** illustrates various lithological classifications:\n     - **Top Layer (0-10 m)**: Soft sediments\n     - **Mid Layers (10-40 m)**: Compacted sediments\n     - **Mid to Bottom Layer (40-60 m)**: Sedimentary rock\n     - **Bottom Layer (60+ m)**: Very hard rock\n\n4. **Seismic Pattern**:\n   - The **left panel** shows **clear reflection patterns**, characterized by smoother waveforms transitioning into less coherent signals at greater depths.\n\n5. **Geological Scenario**:\n   - Continental depositional environment. Soft sediments suggest recent deposition, possibly fluvial or deltaic, transitioning into older, more compacted sediments and sedimentary rock at depth.","report":"### Geological Interpretation Report\n\nThe seismic data interpretation reveals a clear stratification of subsurface layers consistent with common sedimentary depositional environments. The identified layers\u2014soft sediments (0-10 index), compacted sediments (10-40 index), sedimentary rock (40-60 index), and very hard rock (60+ index)\u2014indicate a progressive transition from unconsolidated materials to more competent geological formations. The increasing velocity with depth aligns with traditional lithostratigraphic expectations, reflecting sediment compaction and diagenesis.\n\nThe clear reflection patterns observed suggest well-defined layering typical of continental depositional settings. The interpretations resonate with findings from previous studies where seismic velocity modeling using advanced techniques, such as those proposed in Yang and Ma [1], points to the importance of accurate velocity models for effective subsurface imaging. Similarly, Ma and Alkhalifah's work [2] highlights the need for robust inversion frameworks capable of effectively mapping velocity models to seismic imagery, a necessity given the complexity of the subsurface layers identified.\n\nFor this subsurface scenario, a Full Waveform Inversion (FWI) approach leveraging a physics-informed neural network as conceptualized by Agata et al. [3], would likely provide the best results in refining the velocity model. Overall, the geological scenario depicts a continental depositional environment influenced by historical marine transgressions, supporting the interpretation of extensive sedimentary accumulations with potential hydrocarbon reservoirs in deeper strata."},{"label":"FlatVel_A \u2014 median variability","sample_idx":69,"dataset":"FlatVel_A","has_fault":false,"fault_score":null,"fault_x":null,"vel_range":"1743\u20134130","vmap_row":[1743.0,1743.0,1743.0,1743.0,1743.0,1743.0,1743.0,1743.0,1743.0,1743.0,1743.0,1743.0,1743.0,1743.0,1743.0,1743.0,2091.0,2091.0,2091.0,2091.0,2091.0,2091.0,2091.0,2091.0,2091.0,2091.0,2091.0,2091.0,2091.0,2091.0,2091.0,2091.0,2091.0,2091.0,2091.0,2091.0,2091.0,2091.0,2091.0,2265.0,2265.0,2265.0,2265.0,2265.0,2265.0,2265.0,2265.0,2265.0,2265.0,2265.0,2265.0,2265.0,2265.0,2265.0,2265.0,2265.0,2265.0,2265.0,2265.0,2265.0,2265.0,2265.0,2265.0,4130.0,4130.0,4130.0,4130.0,4130.0,4130.0,4130.0],"litho_col":[2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1,2,2,2,2,2,2,2,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],"n_layers":8,"gradient":34.59,"vision_text":"### Analysis:\n\n1. **Layers**: Three distinct horizontal layers based on color variations:\n   - Layer 1 (topmost): depth index 0 to ~20\n   - Layer 2 (middle): depth index 20 to ~50\n   - Layer 3 (bottom): depth index 50 to 70\n\n2. **Velocity Trend**: Velocity generally increases with depth, consistent with compaction leading to higher seismic velocities at greater depths.\n\n3. **Lithology**: Top layer — soft sediments (light blue, 0–20). Middle — compacted sediments (darker blue, 20–50). Bottom — hard rock, red section (50–70).\n\n4. **Seismic Pattern**: Clear reflection patterns with strong, continuous reflections implying well-defined layers and higher contrast interfaces between soft and compacted sediments.\n\n5. **Geological Scenario**: Marine depositional environment, possibly continental slope or shelf. Passive margin development with successive layers deposited in relatively tranquil waters.","report":"### Geological Interpretation Report\n\nThe seismic analysis reveals three well-defined layers with increasing velocity and varying lithological characteristics, affirming the traditional understanding of sedimentary layering in marine depositional environments. Layer 1, composed of soft sediments, transitions into compacted sediments in Layer 2, followed by hard rock in Layer 3. This stratification is indicative of a passive margin setting, reflecting processes typical of continental slopes or shelves where sediment deposition occurs in relatively stable conditions.\n\nThe continuous reflection patterns observed in the seismic waveform panel corroborate the presence of pronounced interfaces, particularly between soft and compacted sediments, aligning with findings in recent literature regarding high-resolution imaging techniques. For effective velocity model building in this context, the use of Full-Waveform Inversion (FWI) methods is recommended. Literature suggests that advanced techniques, such as the Convolutional Neural Operators proposed by Ma and Alkhalifah, could prove beneficial for enhancing model resolution while addressing generalization limitations in field data [2].\n\nAdditionally, the integration of Bayesian approaches utilizing physics-informed neural networks (PINNs), as explored by Agata et al., presents potential for refining seismic velocity estimations through iterative advancements in model inference [3]. This combination of advanced inversion frameworks and the geological context strongly supports the interpretation of a sedimentary basin influenced by geological processes, confirming the anticipated depositional scenario."},{"label":"FlatVel_A \u2014 low variability","sample_idx":347,"dataset":"FlatVel_A","has_fault":false,"fault_score":null,"fault_x":null,"vel_range":"1815\u20132050","vmap_row":[1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1815.0,1929.0,1929.0,1929.0,1929.0,1929.0,1929.0,1929.0,1929.0,1929.0,1929.0,1929.0,1929.0,1929.0,1929.0,1929.0,1929.0,1929.0,1929.0,1929.0,1929.0,1929.0,1929.0,1929.0,1929.0,1929.0,2050.0,2050.0,2050.0,2050.0,2050.0,2050.0,2050.0,2050.0,2050.0,2050.0,2050.0,2050.0,2050.0,2050.0,2050.0,2050.0,2050.0],"litho_col":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],"n_layers":5,"gradient":3.41,"vision_text":"### Analysis:\n\n1. **Layers**: At least 5 horizontal layers indicated. Layering follows uniform increments consistent with standard seismic practice.\n\n2. **Velocity Trend**: Increase in velocity with depth. Mean velocity gradient of 3.4 m/s per depth index — steady increase suggesting compaction and sediment consolidation.\n\n3. **Lithology**: Top layer — soft sediments (1500–2000 m/s). Deeper zones through compacted sediments, sedimentary rock, hard rock, and very hard rock at greatest depth.\n\n4. **Seismic Pattern**: Clear reflection events with continuous, coherent reflections at certain depths. Stratified layering corresponds to velocity changes in the center panel.\n\n5. **Geological Scenario**: Marine sedimentary basin. Calm shallow-water deposition leading to sequential sediment accumulation, transitioning from soft sediments to consolidated types with increasing depth.","report":"### Geological Interpretation Report\n\nThe seismic image analysis reveals a well-defined stratigraphic sequence characterized by five distinct layers, as determined from the velocity map and the SOM lithology classification. The increase in velocity with depth indicates a typical compaction trend associated with sedimentary depositional environments, particularly suggesting a marine basin scenario. Soft sediments transition into increasingly compacted and harder lithologies, fitting the patterns described in the literature on seismic velocity modeling and geological interpretation.\n\nTo refine the structural interpretation, studies such as Yang and Ma [1] and Ma and Alkhalifah [2] emphasize the significance of employing advanced techniques like full-waveform inversion (FWI) for enhancing velocity models derived from seismic images. Given the consistent velocity gradient observed, a suitable FWI approach utilizing a physics-informed neural network framework may yield an accurate earth model, addressing issues of computational efficiency while increasing resolution.\n\nIn conclusion, the geological scenario inferred from the analysis indicates a marine sedimentary basin evolving over time, marked by soft sediments evolving into consolidated rock at depth. These findings align with the expectations for such environments and highlight the effectiveness of leveraging machine learning methodologies in modern seismic interpretation."}];
+
+const LITHO = [
+  {label:'Soft sediments',     range:'1500–2000',color:'#4575b4'},
+  {label:'Compacted sed.',     range:'2000–2500',color:'#74add1'},
+  {label:'Sedimentary rock',   range:'2500–3000',color:'#abd9e9'},
+  {label:'Hard rock',          range:'3000–3500',color:'#fdae61'},
+  {label:'Very hard rock',     range:'3500–4500',color:'#d73027'},
+];
+
+const SOM_DATA = {
+  flatfault: {
+    qe:0.44, features:7, type:'2D pixel-wise',
+    insight:'Used for FlatFault_A where faults create <em>lateral</em> velocity changes. Each pixel (depth×lateral) becomes one feature vector. The SOM learns to distinguish fault blocks from intact sediment blocks, enabling the fault score to be injected as prior context into the Vision LLM.',
+    neurons:[
+      {vel:1700},{vel:1850},{vel:2050},{vel:2300},
+      {vel:2100},{vel:2500},{vel:2800},{vel:3050},
+      {vel:2900},{vel:3150},{vel:3400},{vel:3700},
+      {vel:3300},{vel:3500},{vel:3800},{vel:4100},
+    ]
+  },
+  flatvel: {
+    qe:0.88, features:25, type:'1D row-wise',
+    insight:'Used for FlatVel_A where velocity only varies with <em>depth</em> (horizontal layers). Features are extracted per depth row (25 dims = 5 sources × 5 attrs). Each depth level maps to a neuron. The 1D structure produces horizontal band patterns that correctly reflect layered velocity models.',
+    neurons:[
+      {vel:1650},{vel:1800},{vel:1950},{vel:2100},
+      {vel:2050},{vel:2250},{vel:2450},{vel:2650},
+      {vel:2600},{vel:2900},{vel:3200},{vel:3500},
+      {vel:3400},{vel:3700},{vel:4000},{vel:4300},
+    ]
+  }
+};
+
+let currentDataset = 'flatfault';
+let selectedNeuron = null;
+let currentSample = 0;
+
+// ── HERO CANVAS ──────────────────────────────────────────────────────────
+function initHero() {
+  const c = document.getElementById('hero-canvas');
+  const ctx = c.getContext('2d');
+  function resize() { c.width = window.innerWidth; c.height = window.innerHeight; }
+  resize();
+  window.addEventListener('resize', resize);
+
+  let t = 0;
+  function draw() {
+    ctx.clearRect(0,0,c.width,c.height);
+    const nTraces = 20;
+    const spacing = c.width / nTraces;
+    for (let i = 0; i < nTraces; i++) {
+      const x = spacing * i + spacing/2;
+      ctx.beginPath();
+      ctx.strokeStyle = `rgba(0,212,170,${0.3 + 0.2*Math.sin(i*0.5+t*0.3)})`;
+      ctx.lineWidth = 1;
+      for (let y = 0; y < c.height; y += 2) {
+        const freq = 0.04 + 0.01*Math.sin(i*0.7);
+        const amp = 18 + 8*Math.sin(i*1.1+t*0.1);
+        const decay = Math.exp(-y/c.height*2);
+        const wave = amp * decay * Math.sin(freq*y + t*0.8 + i*0.4);
+        y===0 ? ctx.moveTo(x+wave,y) : ctx.lineTo(x+wave,y);
+      }
+      ctx.stroke();
+    }
+    t += 0.03;
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+// ── SOM GRID ─────────────────────────────────────────────────────────────
+function velToColor(v, alpha=1) {
+  const t = Math.max(0,Math.min(1,(v-1500)/3000));
+  const r = Math.round(30  + t*200);
+  const g = Math.round(180 - t*130);
+  const b = Math.round(210 - t*180);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function buildSOMGrid() {
+  const data = SOM_DATA[currentDataset];
+  const grid = document.getElementById('som-neuron-grid');
+  grid.innerHTML = '';
+  data.neurons.forEach((n,i) => {
+    const cell = document.createElement('div');
+    cell.className = 'neuron' + (selectedNeuron===i?' selected':'');
+    cell.id = 'n'+i;
+    cell.style.background = velToColor(n.vel, 0.55);
+    cell.style.border = selectedNeuron===i ? '1.5px solid var(--teal)' : '1.5px solid transparent';
+    const row=Math.floor(i/4), col=i%4;
+    cell.innerHTML = `<span class="neuron-id" style="color:rgba(255,255,255,0.7)">[${row},${col}]</span><span class="neuron-vel" style="color:rgba(255,255,255,0.5)">${Math.round(n.vel)}</span>`;
+    cell.onclick = () => selectNeuron(i);
+    grid.appendChild(cell);
+  });
+
+  document.getElementById('qe-val').textContent = data.qe.toFixed(2);
+  document.getElementById('qe-val').style.color = data.qe < 0.6 ? 'var(--teal)' : 'var(--amber)';
+  document.getElementById('qe-bar').style.width = (data.qe/3.5*100).toFixed(1)+'%';
+  document.getElementById('qe-bar').style.background = data.qe < 0.6 ? 'var(--teal)' : 'var(--amber)';
+  document.getElementById('feat-val').textContent = data.features;
+  document.getElementById('som-insight').innerHTML = `<strong style="color:var(--white)">${data.type}</strong> — ${data.insight}`;
+  document.getElementById('neuron-info').textContent = '← Click a neuron to inspect its learned prototype';
+}
+
+function selectNeuron(i) {
+  selectedNeuron = i;
+  document.querySelectorAll('.neuron').forEach((c,j)=>{
+    c.classList.toggle('selected', j===i);
+    c.style.border = j===i ? '1.5px solid var(--teal)' : '1.5px solid transparent';
+  });
+  const data = SOM_DATA[currentDataset];
+  const n = data.neurons[i];
+  const li = n.vel < 2000 ? 0 : n.vel < 2500 ? 1 : n.vel < 3000 ? 2 : n.vel < 3500 ? 3 : 4;
+  document.getElementById('neuron-info').innerHTML = `
+    <div style="margin-bottom:6px; color:var(--white);">Neuron [${Math.floor(i/4)},${i%4}]</div>
+    <div>Learned velocity: <span style="color:var(--teal)">${Math.round(n.vel)} m/s</span></div>
+    <div>Lithology: <span style="color:var(--white2)">${LITHO[li].label}</span></div>
+    <div style="margin-top:8px; height:10px; border-radius:4px; background:${LITHO[li].color};"></div>
+    <div style="font-size:11px; color:var(--slate); margin-top:4px;">Range: ${LITHO[li].range} m/s</div>
+  `;
+}
+
+function setSOMDataset(ds) {
+  currentDataset = ds;
+  selectedNeuron = null;
+  document.querySelectorAll('.som-btn').forEach((b,i)=>b.classList.toggle('active',i===(ds==='flatfault'?0:1)));
+  buildSOMGrid();
+}
+
+// ── SAMPLE EXPLORER ───────────────────────────────────────────────────────
+function buildSampleTabs() {
+  const wrap = document.getElementById('sample-tabs');
+  wrap.innerHTML = '';
+  SAMPLES.forEach((s,i)=>{
+    const btn = document.createElement('button');
+    const short = s.label.replace('FlatFault_A — ','FF: ').replace('FlatVel_A — ','FV: ');
+    btn.className = 'sample-tab'+(s.has_fault?' fault':'')+(i===0?' active':'');
+    btn.textContent = short;
+    btn.onclick = ()=>showSample(i);
+    wrap.appendChild(btn);
+  });
+}
+
+function drawVelCanvas(s) {
+  const canvas = document.getElementById('vel-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth || 400, H = 200;
+  canvas.width = W * window.devicePixelRatio; canvas.height = H * window.devicePixelRatio;
+  canvas.style.width = W+'px'; canvas.style.height = H+'px';
+  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  ctx.clearRect(0,0,W,H);
+
+  const vmin=1500, vmax=4500;
+  const prof = s.vmap_row;
+
+  // Grid lines
+  [1500,2000,2500,3000,3500,4000,4500].forEach(v=>{
+    const x = (v-vmin)/(vmax-vmin)*W;
+    ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.lineWidth=0.5;
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,0.25)'; ctx.font='10px monospace';
+    ctx.fillText(v,x+2,H-4);
+  });
+
+  // Fill gradient
+  const grad = ctx.createLinearGradient(0,0,W,0);
+  grad.addColorStop(0,'rgba(69,117,180,0.15)');
+  grad.addColorStop(0.5,'rgba(253,174,97,0.15)');
+  grad.addColorStop(1,'rgba(215,48,39,0.15)');
+  ctx.fillStyle=grad;
+
+  ctx.beginPath();
+  prof.forEach((v,d)=>{
+    const x=(v-vmin)/(vmax-vmin)*W;
+    const y=(d/69)*H;
+    d===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.lineTo(0,H); ctx.lineTo(0,0); ctx.closePath(); ctx.fill();
+
+  // Colored line
+  ctx.lineWidth=2.5; ctx.lineJoin='round';
+  prof.forEach((v,d)=>{
+    const x=(v-vmin)/(vmax-vmin)*W;
+    const y=(d/69)*H;
+    const t=(v-vmin)/(vmax-vmin);
+    const r=Math.round(69+t*146),g=Math.round(117-t*69),b=Math.round(180-t*141);
+    ctx.strokeStyle=`rgb(${r},${g},${b})`;
+    ctx.beginPath();
+    if(d>0){
+      const pv=prof[d-1];
+      const px=(pv-vmin)/(vmax-vmin)*W, py=((d-1)/69)*H;
+      ctx.moveTo(px,py); ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  });
+
+  // depth arrow
+  ctx.fillStyle='rgba(136,146,164,0.6)'; ctx.font='10px monospace';
+  ctx.fillText('depth →',4,14);
+}
+
+function drawLithoCanvas(s) {
+  const canvas = document.getElementById('litho-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth || 400, H = 200;
+  canvas.width = W * window.devicePixelRatio; canvas.height = H * window.devicePixelRatio;
+  canvas.style.width = W+'px'; canvas.style.height = H+'px';
+  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  ctx.clearRect(0,0,W,H);
+
+  const col = s.litho_col;
+  const segH = H/col.length;
+  col.forEach((cl,d)=>{
+    ctx.fillStyle = LITHO[cl].color + 'cc';
+    ctx.fillRect(0, d*segH, W, segH+0.5);
+  });
+
+  // fault line
+  if(s.has_fault && s.fault_x!==null) {
+    const fx = (s.fault_x/70)*W;
+    ctx.strokeStyle='rgba(245,166,35,0.9)'; ctx.lineWidth=2; ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.moveTo(fx,0); ctx.lineTo(fx,H); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='rgba(245,166,35,0.9)'; ctx.font='bold 11px monospace';
+    ctx.fillText('fault',fx+4,16);
+  }
+
+  // depth label
+  ctx.fillStyle='rgba(255,255,255,0.4)'; ctx.font='10px monospace';
+  ctx.fillText('depth 0',4,14);
+  ctx.fillText('depth 69',4,H-6);
+}
+
+function buildLithoStrip(litho_col) {
+  const strip = document.getElementById('litho-strip');
+  strip.innerHTML='';
+  litho_col.forEach(cl=>{
+    const seg=document.createElement('div');
+    seg.className='litho-seg';
+    seg.style.background=LITHO[cl].color;
+    strip.appendChild(seg);
+  });
+}
+
+function buildLithoLegend(litho_col) {
+  const seen = [...new Set(litho_col)].sort();
+  const leg = document.getElementById('litho-legend');
+  leg.innerHTML='';
+  seen.forEach(cl=>{
+    const item=document.createElement('div');
+    item.className='litho-item';
+    item.innerHTML=`<div class="litho-swatch" style="background:${LITHO[cl].color}"></div>${LITHO[cl].label} <span style="color:var(--bg3); background:var(--slate); border-radius:3px; padding:1px 5px; font-size:10px; margin-left:2px; font-family:monospace;">${LITHO[cl].range}</span>`;
+    leg.appendChild(item);
+  });
+}
+
+function showSample(idx) {
+  currentSample = idx;
+  document.querySelectorAll('.sample-tab').forEach((b,i)=>b.classList.toggle('active',i===idx));
+
+  const s = SAMPLES[idx];
+
+  // Fault badge
+  const fbw = document.getElementById('fault-badge-wrap');
+  if(s.dataset==='FlatFault_A') {
+    fbw.innerHTML = s.has_fault
+      ? `<div class="fault-badge yes">⚡ FAULT DETECTED — score ${s.fault_score} · lateral index ${s.fault_x}</div>`
+      : `<div class="fault-badge no">✓ NO FAULT — score ${s.fault_score}</div>`;
+  } else {
+    fbw.innerHTML = `<div class="fault-badge no">${s.n_layers} layers · gradient ${s.gradient} m/s/idx</div>`;
+  }
+
+  // SOM metrics
+  const mm = document.getElementById('som-metrics');
+  if(s.dataset==='FlatFault_A') {
+    mm.innerHTML = `
+      dataset: <span style="color:var(--teal)">FlatFault_A</span><br>
+      SOM type: <span style="color:var(--white2)">2D pixel-wise</span><br>
+      grid: <span style="color:var(--white2)">4×4 (16 neurons)</span><br>
+      QE: <span style="color:var(--teal)">0.44</span><br>
+      features/pixel: <span style="color:var(--white2)">7</span><br>
+      fault score: <span style="color:${s.has_fault?'var(--amber)':'var(--teal)'};">${s.fault_score}</span><br>
+      vel range: <span style="color:var(--white2)">${s.vel_range} m/s</span>
+    `;
+  } else {
+    mm.innerHTML = `
+      dataset: <span style="color:var(--amber)">FlatVel_A</span><br>
+      SOM type: <span style="color:var(--white2)">1D row-wise</span><br>
+      grid: <span style="color:var(--white2)">4×4 (16 neurons)</span><br>
+      QE: <span style="color:var(--amber)">0.88</span><br>
+      features/row: <span style="color:var(--white2)">25</span><br>
+      layers detected: <span style="color:var(--teal)">${s.n_layers}</span><br>
+      gradient: <span style="color:var(--white2)">${s.gradient} m/s/idx</span><br>
+      vel range: <span style="color:var(--white2)">${s.vel_range} m/s</span>
+    `;
+  }
+
+  // Vision text — strip markdown bold
+  const vt = s.vision_text.replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--white)">$1</strong>').replace(/\n/g,'<br>');
+  document.getElementById('vision-box').innerHTML = vt;
+
+  // Report — strip markdown
+  const rt = s.report.replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--white)">$1</strong>').replace(/### /g,'').replace(/\n/g,'<br>');
+  document.getElementById('report-box').innerHTML = rt;
+
+  setTimeout(()=>{
+    drawVelCanvas(s);
+    drawLithoCanvas(s);
+    buildLithoStrip(s.litho_col);
+    buildLithoLegend(s.litho_col);
+  }, 10);
+}
+
+// ── PIPELINE ──────────────────────────────────────────────────────────────
+function togglePipe(i) {
+  const d = document.getElementById('pd'+i);
+  d.classList.toggle('open');
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────
+window.addEventListener('load', ()=>{
+  initHero();
+  buildSOMGrid();
+  buildSampleTabs();
+  showSample(0);
+});
+
+window.addEventListener('resize', ()=>{
+  if(currentSample !== null) {
+    drawVelCanvas(SAMPLES[currentSample]);
+    drawLithoCanvas(SAMPLES[currentSample]);
+  }
+});
+</script>
+</body>
+</html>
